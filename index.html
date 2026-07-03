@@ -148,7 +148,7 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
 
     <div class="row">
       <div>
-        <label for="tipusSelect">Tipus de tacó</label>
+        <label for="tipusSelect">Tipus de taco</label>
         <select id="tipusSelect"></select>
       </div>
       <div>
@@ -167,7 +167,7 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
       <button type="button" id="qtyPlus">+</button>
     </div>
 
-    <button class="btn-add" id="btnAddLine">+ Afegeix aquest tacó a la comanda</button>
+    <button class="btn-add" id="btnAddLine">+ Afegeix aquest taco a la comanda</button>
 
     <div id="cartLines"></div>
     <div class="cart-total" id="cartTotal" style="display:none">
@@ -177,8 +177,15 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
     <button class="btn-primary" id="btnSubmit" disabled>Envia la comanda</button>
   </div>
 
-  <!-- LLISTA EN TEMPS REAL, AGRUPADA PER TIPUS -->
-  <div class="card">
+  <!-- ACCÉS ENCARREGAT/DA -->
+  <div class="card" id="lockedCard">
+    <h2>Zona de l'encarregat/da</h2>
+    <p class="hint">Aquí es veu la llista completa de comandes i es pot editar el menú. Només amb contrasenya.</p>
+    <button class="btn-secondary" id="unlockBtn" style="width:100%">🔒 Desbloqueja</button>
+  </div>
+
+  <!-- LLISTA EN TEMPS REAL, AGRUPADA PER TIPUS (només visible un cop desbloquejat) -->
+  <div class="card" id="ordersCard" style="display:none">
     <h2>Comandes d'aquesta setmana</h2>
     <p class="hint">Agrupat per tipus perquè sigui fàcil de demanar. S'actualitza sola.</p>
 
@@ -192,8 +199,8 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
     </div>
   </div>
 
-  <div class="admin-link">
-    <a id="adminToggle">Ets l'encarregat/da? Edita el menú</a>
+  <div class="admin-link" id="adminLinkWrap" style="display:none">
+    <a id="adminToggle">Edita el menú de la setmana</a>
   </div>
 
   <!-- PANELL ADMIN -->
@@ -366,7 +373,7 @@ function renderMenu(){
     document.getElementById('midaSelect').disabled = true;
   } else {
     hintEl.style.display = 'block';
-    hintEl.textContent = `Tria el tacó, la mida i treu el que no vulguis — s'envia a l'encarregat/da a l'instant.`;
+    hintEl.textContent = `Tria el taco, la mida i treu el que no vulguis — s'envia a l'encarregat/da a l'instant.`;
     document.getElementById('btnAddLine').style.display = 'block';
     document.getElementById('nomInput').disabled = false;
     document.getElementById('tipusSelect').disabled = false;
@@ -523,14 +530,21 @@ if(firebaseReady){
 
 /* ---------- ADMIN ---------- */
 let adminUnlocked = false;
+
+document.getElementById('unlockBtn').addEventListener('click', () => {
+  const pass = prompt("Contrasenya de l'encarregat/da:");
+  if(pass !== ADMIN_PASSWORD){ toast('Contrasenya incorrecta'); return; }
+  adminUnlocked = true;
+  document.getElementById('lockedCard').style.display = 'none';
+  document.getElementById('ordersCard').style.display = 'block';
+  document.getElementById('adminLinkWrap').style.display = 'block';
+  toast('Zona desbloquejada ✓');
+});
+
 document.getElementById('adminToggle').addEventListener('click', () => {
+  if(!adminUnlocked) return;
   const panel = document.getElementById('adminPanel');
   if(panel.style.display === 'block'){ panel.style.display = 'none'; return; }
-  if(!adminUnlocked){
-    const pass = prompt("Contrasenya de l'encarregat/da:");
-    if(pass !== ADMIN_PASSWORD){ toast('Contrasenya incorrecta'); return; }
-    adminUnlocked = true;
-  }
   document.getElementById('dataInput').value = currentMenu.data || '';
   document.getElementById('closedCheck').checked = !!currentMenu.tancat;
   document.getElementById('midesJson').value = JSON.stringify(currentMenu.mides || [], null, 2);
