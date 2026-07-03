@@ -913,13 +913,13 @@ document.getElementById('btnSaveMenu').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btnWhatsappExport').addEventListener('click', () => {
+document.getElementById('btnWhatsappExport').addEventListener('click', async () => {
   if(!lastOrders.length){ toast('Encara no hi ha cap comanda'); return; }
   const { groups, grand } = computeGroups(lastOrders);
-  let text = `🌮 *TACOS — ${currentMenu.data || 'Dijous'}*\n\n`;
+  let text = `🌮 TACOS — ${currentMenu.data || 'Dijous'}\n\n`;
   Object.keys(groups).sort().forEach(tipusNom => {
     const g = groups[tipusNom];
-    text += `*${tipusNom.toUpperCase()}* (${g.total} unitats)\n`;
+    text += `${tipusNom.toUpperCase()} (${g.total} unitats)\n`;
     Object.values(g.combos)
       .sort((a,b) => a.mida.localeCompare(b.mida))
       .forEach(combo => {
@@ -928,8 +928,21 @@ document.getElementById('btnWhatsappExport').addEventListener('click', () => {
       });
     text += '\n';
   });
-  text += `*TOTAL A PAGAR: ${euro(grand)}*`;
-  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  text += `TOTAL A PAGAR: ${euro(grand)}`;
+
+  if(navigator.share){
+    try{ await navigator.share({ text }); return; }
+    catch(e){ /* l'usuari ha cancel·lat, no cal fer res més */ return; }
+  }
+  if(navigator.clipboard){
+    try{
+      await navigator.clipboard.writeText(text);
+      toast('Llista copiada — enganxa-la a WhatsApp ✓');
+      return;
+    }catch(e){}
+  }
+  // últim recurs: intenta obrir WhatsApp directament (navegador normal, no app instal·lada)
+  window.location.href = 'https://wa.me/?text=' + encodeURIComponent(text);
 });
 
 document.getElementById('btnResetOrders').addEventListener('click', async () => {
