@@ -50,6 +50,8 @@ header.top .sub{margin-top:8px; font-size:14.5px; color:#CBD1E8; font-weight:600
 
 .install-card{padding:14px 16px;}
 .install-row{display:flex; align-items:center; gap:12px;}
+.install-btns{display:flex; gap:8px; flex-shrink:0;}
+.share-btn{padding:9px 12px; font-size:15px;}
 .install-icon{font-size:30px; line-height:1;}
 .install-text{flex:1; display:flex; flex-direction:column; gap:1px;}
 .install-text b{font-size:14.5px; color:var(--ink);}
@@ -179,7 +181,10 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
         <b>Instal·la TACOS al mòbil</b>
         <span>Un accés directe des de la pantalla d'inici, com una app.</span>
       </div>
-      <button id="installBtn" class="btn-secondary install-btn">Instal·la</button>
+      <div class="install-btns">
+        <button id="shareBtn" class="btn-secondary install-btn share-btn" title="Comparteix">📤</button>
+        <button id="installBtn" class="btn-secondary install-btn">Instal·la</button>
+      </div>
     </div>
     <div id="installSteps" class="install-steps" style="display:none"></div>
   </div>
@@ -411,6 +416,27 @@ function platformInstructions(){
       <li>Confirma i l'app quedarà accessible des de l'escriptori</li>
     </ol>` };
 }
+
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  const shareData = {
+    title: "TACOS · Escatllots del Pla",
+    text: "Fes la teva comanda de tacos del dijous! 🌮",
+    url: window.location.href
+  };
+  if(navigator.share){
+    try{ await navigator.share(shareData); }
+    catch(e){ /* l'usuari ha cancel·lat, no cal fer res */ }
+  } else if(navigator.clipboard){
+    try{
+      await navigator.clipboard.writeText(window.location.href);
+      toast("Enllaç copiat ✓");
+    }catch(e){
+      toast("No s'ha pogut copiar l'enllaç");
+    }
+  } else {
+    toast("Copia l'adreça des de la barra del navegador");
+  }
+});
 
 document.getElementById('installBtn').addEventListener('click', async () => {
   if(deferredInstallPrompt){
