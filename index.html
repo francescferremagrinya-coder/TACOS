@@ -112,6 +112,8 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
 @keyframes pop{from{transform:scale(.6); opacity:0;} to{transform:scale(1); opacity:1;}}
 
 .group{margin-bottom:18px;}
+.section-label{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin:18px 0 8px;}
+.section-label:first-child{margin-top:0;}
 .group-head{display:flex; justify-content:space-between; align-items:baseline; border-bottom:3px solid var(--night); padding-bottom:6px; margin-bottom:8px;}
 .group-head h3{font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:.03em; margin:0; color:var(--night);}
 .group-head .count{font-weight:800; color:var(--chili-dark); font-size:15px;}
@@ -243,6 +245,7 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
   <div class="card" id="ordersCard" style="display:none">
     <h2>Comandes d'aquesta setmana</h2>
     <p class="hint">Agrupat per tipus perquè sigui fàcil de demanar. S'actualitza sola.</p>
+    <button class="btn-secondary" id="btnWhatsappExport" style="width:100%; margin-bottom:14px;">📲 Envia la llista per WhatsApp</button>
 
     <div class="tower-wrap" id="towerWrap"></div>
 
@@ -607,6 +610,24 @@ let lastOrders = [];
 let editingOrderId = null;
 let editingLines = null;
 
+function computeGroups(orders){
+  const groups = {}; // tipus -> { total, combos: { key: {mida, sense, qty, noms:[]} } }
+  let grand = 0;
+  orders.forEach(o => {
+    grand += o.total;
+    o.items.forEach(line => {
+      if(!groups[line.tipus]) groups[line.tipus] = { total: 0, combos: {} };
+      const g = groups[line.tipus];
+      g.total += line.qty;
+      const key = line.mida + '|' + (line.sense || []).slice().sort().join(',');
+      if(!g.combos[key]) g.combos[key] = { mida: line.mida, sense: line.sense || [], qty: 0, noms: [] };
+      g.combos[key].qty += line.qty;
+      g.combos[key].noms.push(line.qty > 1 ? `${o.nom} (${line.qty})` : o.nom);
+    });
+  });
+  return { groups, grand };
+}
+
 function renderOrders(orders){
   const listDiv = document.getElementById('ordersList');
   const tower = document.getElementById('towerWrap');
@@ -618,28 +639,21 @@ function renderOrders(orders){
     return;
   }
 
-  // agrupar per tipus -> per combinació (mida + sense) -> qty + noms
-  const groups = {}; // tipus -> { total, combos: { key: {mida, sense, qty, noms:Set} } }
-  let grand = 0;
-
   orders.forEach(o => {
-    grand += o.total;
     tower.appendChild(Object.assign(document.createElement('div'), {
       className: 'tower-block',
       textContent: o.nom.split(' ')[0]
     }));
-    o.items.forEach(line => {
-      if(!groups[line.tipus]) groups[line.tipus] = { total: 0, combos: {} };
-      const g = groups[line.tipus];
-      g.total += line.qty;
-      const key = line.mida + '|' + (line.sense || []).slice().sort().join(',');
-      if(!g.combos[key]) g.combos[key] = { mida: line.mida, sense: line.sense || [], qty: 0, noms: [] };
-      g.combos[key].qty += line.qty;
-      g.combos[key].noms.push(line.qty > 1 ? `${o.nom} (${line.qty})` : o.nom);
-    });
   });
 
+  const { groups, grand } = computeGroups(orders);
+
   listDiv.innerHTML = '';
+  const summaryLabel = document.createElement('p');
+  summaryLabel.className = 'section-label';
+  summaryLabel.textContent = '🌮 Resum per tipus — per anar a buscar-los';
+  listDiv.appendChild(summaryLabel);
+
   Object.keys(groups).sort().forEach(tipusNom => {
     const g = groups[tipusNom];
     const groupEl = document.createElement('div');
@@ -663,9 +677,13 @@ function renderOrders(orders){
   });
 
   // ---- llista individual, editable per l'encarregat/da ----
+  const indivLabel = document.createElement('p');
+  indivLabel.className = 'section-label';
+  indivLabel.textContent = `👤 Per persona — edita o elimina (${orders.length})`;
+  listDiv.appendChild(indivLabel);
+
   const indivWrap = document.createElement('div');
   indivWrap.className = 'group';
-  indivWrap.innerHTML = `<div class="group-head"><h3>Comandes individuals</h3><span class="count">${orders.length}</span></div>`;
 
   orders.forEach(o => {
     const item = document.createElement('div');
@@ -893,6 +911,25 @@ document.getElementById('btnSaveMenu').addEventListener('click', async () => {
     console.error(e);
     toast('Error desant el menú');
   }
+});
+
+document.getElementById('btnWhatsappExport').addEventListener('click', () => {
+  if(!lastOrders.length){ toast('Encara no hi ha cap comanda'); return; }
+  const { groups, grand } = computeGroups(lastOrders);
+  let text = `🌮 *TACOS — ${currentMenu.data || 'Dijous'}*\n\n`;
+  Object.keys(groups).sort().forEach(tipusNom => {
+    const g = groups[tipusNom];
+    text += `*${tipusNom.toUpperCase()}* (${g.total} unitats)\n`;
+    Object.values(g.combos)
+      .sort((a,b) => a.mida.localeCompare(b.mida))
+      .forEach(combo => {
+        const senseTxt = combo.sense.length ? ` (sense ${combo.sense.join(', ').toLowerCase()})` : '';
+        text += `${combo.qty}× ${combo.mida}${senseTxt} — ${combo.noms.join(', ')}\n`;
+      });
+    text += '\n';
+  });
+  text += `*TOTAL A PAGAR: ${euro(grand)}*`;
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 });
 
 document.getElementById('btnResetOrders').addEventListener('click', async () => {
