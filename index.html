@@ -84,7 +84,16 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
   cursor:pointer; user-select:none;
 }
 .ing-chip.off{background:var(--paper-2); color:var(--ink-soft); border-color:var(--paper-2); text-decoration:line-through;}
+.ing-chip.selected{background:var(--good); color:#fff; border-color:var(--good);}
 .ing-chip input{display:none;}
+
+.extras-toggle-btn{
+  width:100%; display:flex; justify-content:space-between; align-items:center;
+  background:var(--paper-2); border:none; border-radius:10px; padding:12px 14px;
+  margin-top:12px; font-weight:800; font-size:14px; color:var(--ink); cursor:pointer;
+}
+.extras-toggle-btn .chevron{transition:transform .2s; color:var(--ink-soft);}
+.extras-toggle-btn.open .chevron{transform:rotate(180deg);}
 
 .qty-stepper{display:flex; align-items:center; gap:10px; margin-top:6px;}
 .qty-stepper button{width:38px; height:38px; border-radius:10px; border:none; background:var(--night); color:var(--corn); font-size:20px; font-weight:800; cursor:pointer;}
@@ -227,6 +236,12 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
     <label>Personalitza (per defecte porta de tot)</label>
     <div class="ingredient-toggles" id="ingredientToggles"></div>
 
+    <button type="button" class="extras-toggle-btn" id="extrasSectionToggle">
+      <span>🧀 Opció forn + gratinat</span>
+      <span class="chevron" id="extrasChevron">▾</span>
+    </button>
+    <div class="ingredient-toggles" id="extresToggles" style="display:none;"></div>
+
     <label>Quantitat</label>
     <div class="qty-stepper">
       <button type="button" id="qtyMinus">−</button>
@@ -309,13 +324,17 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
     <label style="margin-top:14px">IBAN per transferència</label>
     <input type="text" id="ibanInput" placeholder="ex: ES12 3456 7890 1234 5678 9012">
 
-    <label style="margin-top:18px">Mides i preus</label>
+    <label style="margin-top:18px">Mides (noms)</label>
     <div id="midesRows"></div>
     <button class="btn-add" id="btnAddMida" type="button">+ Afegeix mida</button>
 
-    <label style="margin-top:18px">Tipus de taco</label>
+    <label style="margin-top:18px">Tipus de taco (amb preu per cada mida)</label>
     <div id="tipusRows"></div>
     <button class="btn-add" id="btnAddTipus" type="button">+ Afegeix tipus</button>
+
+    <label style="margin-top:18px">🧀 Opció forn + gratinat (preu addicional)</label>
+    <div id="extresRows"></div>
+    <button class="btn-add" id="btnAddExtra" type="button">+ Afegeix extra</button>
 
     <div class="admin-actions">
       <button class="btn-secondary" id="btnSaveMenu">Desar menú</button>
@@ -375,15 +394,24 @@ const DEFAULT_MENU = {
   tancat: false,
   bizum: "",
   iban: "",
-  mides: [
-    { nom: "L", preu: 6 },
-    { nom: "XL", preu: 8.5 },
-    { nom: "XXL", preu: 11.5 }
-  ],
+  mides: ["L", "XL", "XXL"],
   tipus: [
-    { nom: "Pollastre", ingredients: ["Salsa", "Formatge", "Patates"] },
-    { nom: "Vedella", ingredients: ["Salsa", "Formatge", "Patates"] },
-    { nom: "Mixt (vedella + pollastre)", ingredients: ["Salsa", "Formatge", "Patates"] }
+    { nom: "Pollastre", ingredients: ["Salsa", "Formatge", "Patates"], preus: { L: 6, XL: 8.5, XXL: 11.5 } },
+    { nom: "Ternera", ingredients: ["Salsa", "Formatge", "Patates"], preus: { L: 6, XL: 8.5, XXL: 11.5 } },
+    { nom: "Mixt (ternera + pollastre)", ingredients: ["Salsa", "Formatge", "Patates"], preus: { L: 6, XL: 8.5, XXL: 11.5 } },
+    { nom: "Cordon bleu", ingredients: ["Salsa", "Formatge", "Patates"], preus: { L: 7, XL: 9.5, XXL: 13.5 } },
+    { nom: "4 formaggi", ingredients: ["Salsa", "Formatge", "Patates"], preus: { L: 6, XL: 8.5, XXL: 11.5 } }
+  ],
+  extres: [
+    { nom: "Formatge mozzarella", preu: 0.5 },
+    { nom: "Formatge de cabra", preu: 0.5 },
+    { nom: "Formatge Gouda", preu: 0.5 },
+    { nom: "Formatge cheddar", preu: 0.5 },
+    { nom: "Mozzarella i ceba fregida", preu: 0.5 },
+    { nom: "Mozzarella, xampinyons, pebrot vermell i verd", preu: 0.5 },
+    { nom: "Mozzarella i bacó", preu: 1 },
+    { nom: "Mozzarella i gall dindi fumat", preu: 1 },
+    { nom: "Mozzarella i llardons", preu: 1 }
   ]
 };
 
@@ -391,6 +419,7 @@ let currentMenu = DEFAULT_MENU;
 let cart = [];
 let currentQty = 1;
 let currentSense = new Set(); // ingredients trets de la línia actual
+let currentExtres = new Set(); // extres afegits a la línia actual (noms)
 
 function euro(n){ return n.toFixed(2).replace('.', ',') + ' €'; }
 function toast(msg){
@@ -496,9 +525,14 @@ function currentTipusObj(){
   const idx = document.getElementById('tipusSelect').value || 0;
   return currentMenu.tipus[idx];
 }
-function currentMidaObj(){
+function currentMidaNom(){
   const idx = document.getElementById('midaSelect').value || 0;
   return currentMenu.mides[idx];
+}
+function currentPreuBase(){
+  const t = currentTipusObj();
+  const m = currentMidaNom();
+  return (t && t.preus && t.preus[m] != null) ? t.preus[m] : 0;
 }
 
 function populateTipusSelect(){
@@ -512,14 +546,17 @@ function populateTipusSelect(){
   });
   populateMidaSelect();
   renderIngredientToggles();
+  renderExtresToggles();
 }
 function populateMidaSelect(){
   const sel = document.getElementById('midaSelect');
   sel.innerHTML = '';
+  const t = currentTipusObj();
   currentMenu.mides.forEach((m, i) => {
+    const preu = (t && t.preus && t.preus[m] != null) ? t.preus[m] : 0;
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = `${m.nom} · ${euro(m.preu)}`;
+    opt.textContent = `${m} · ${euro(preu)}`;
     sel.appendChild(opt);
   });
 }
@@ -543,6 +580,35 @@ function renderIngredientToggles(){
     wrap.appendChild(chip);
   });
 }
+function renderExtresToggles(){
+  currentExtres = new Set();
+  const wrap = document.getElementById('extresToggles');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  const extres = currentMenu.extres || [];
+  if(!extres.length){
+    wrap.innerHTML = '<span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">No hi ha extres configurats.</span>';
+    return;
+  }
+  extres.forEach(ex => {
+    const chip = document.createElement('label');
+    chip.className = 'ing-chip';
+    chip.innerHTML = `<input type="checkbox" data-ex="${ex.nom}"> ${ex.nom} (+${euro(ex.preu)})`;
+    chip.querySelector('input').addEventListener('change', (e) => {
+      if(e.target.checked){ currentExtres.add(ex.nom); chip.classList.add('selected'); }
+      else { currentExtres.delete(ex.nom); chip.classList.remove('selected'); }
+    });
+    wrap.appendChild(chip);
+  });
+}
+
+document.getElementById('extrasSectionToggle').addEventListener('click', () => {
+  const wrap = document.getElementById('extresToggles');
+  const btn = document.getElementById('extrasSectionToggle');
+  const isOpen = wrap.style.display !== 'none';
+  wrap.style.display = isOpen ? 'none' : 'flex';
+  btn.classList.toggle('open', !isOpen);
+});
 
 function renderMenu(){
   document.getElementById('subDate').textContent = currentMenu.data || 'Comanda de dijous';
@@ -571,7 +637,10 @@ function renderMenu(){
   populateTipusSelect();
 }
 
-document.getElementById('tipusSelect').addEventListener('change', renderIngredientToggles);
+document.getElementById('tipusSelect').addEventListener('change', () => {
+  populateMidaSelect();
+  renderIngredientToggles();
+});
 document.getElementById('midaSelect').addEventListener('change', () => {});
 document.getElementById('qtyMinus').addEventListener('click', () => {
   if(currentQty > 1){ currentQty--; document.getElementById('qtyValue').textContent = currentQty; }
@@ -582,16 +651,22 @@ document.getElementById('qtyPlus').addEventListener('click', () => {
 
 document.getElementById('btnAddLine').addEventListener('click', () => {
   const t = currentTipusObj();
-  const m = currentMidaObj();
+  const midaNom = currentMidaNom();
+  const preuBase = currentPreuBase();
+  const extresList = (currentMenu.extres || []).filter(ex => currentExtres.has(ex.nom));
+  const preuUnitari = preuBase + extresList.reduce((s, ex) => s + ex.preu, 0);
   cart.push({
     tipus: t.nom,
-    mida: m.nom,
-    preu: m.preu,
+    mida: midaNom,
+    preu: preuUnitari,
     qty: currentQty,
-    sense: Array.from(currentSense)
+    sense: Array.from(currentSense),
+    extres: extresList.map(ex => ex.nom)
   });
   currentQty = 1;
   document.getElementById('qtyValue').textContent = 1;
+  renderIngredientToggles();
+  renderExtresToggles();
   renderCart();
 });
 
@@ -603,7 +678,10 @@ function renderCart(){
     total += line.preu * line.qty;
     const el = document.createElement('div');
     el.className = 'cart-line';
-    const senseText = line.sense.length ? `<span class="sense">sense ${line.sense.join(', ').toLowerCase()}</span>` : '';
+    const bits = [];
+    if(line.sense && line.sense.length) bits.push(`sense ${line.sense.join(', ').toLowerCase()}`);
+    if(line.extres && line.extres.length) bits.push(`+ ${line.extres.join(', ')}`);
+    const senseText = bits.length ? `<span class="sense">${bits.join(' · ')}</span>` : '';
     el.innerHTML = `<div class="info"><b>${line.qty} × ${line.tipus} (${line.mida})</b>${senseText}</div><div class="right">${euro(line.preu*line.qty)}<span class="rm" data-i="${i}">✕</span></div>`;
     linesDiv.appendChild(el);
   });
@@ -658,14 +736,21 @@ function openPaymentCard(total){
 
 function renderPaymentDetail(method){
   const el = document.getElementById('paymentDetail');
-  if(method === 'bizum'){
-    el.innerHTML = currentMenu.bizum
-      ? `<div class="num">${currentMenu.bizum}</div><div class="tap">Envia el Bizum a aquest número</div>`
-      : `<span class="missing">L'encarregat/da encara no ha configurat el número de Bizum.</span>`;
+  const value = method === 'bizum' ? currentMenu.bizum : currentMenu.iban;
+  const label = method === 'bizum' ? 'Envia el Bizum a aquest número' : "Fes la transferència a aquest IBAN";
+  const missing = method === 'bizum' ? "L'encarregat/da encara no ha configurat el número de Bizum." : "L'encarregat/da encara no ha configurat l'IBAN.";
+  if(value){
+    el.innerHTML = `<div class="num" id="copyValue" style="cursor:pointer;">${value}</div><div class="tap">👆 Toca per copiar — ${label}</div>`;
+    document.getElementById('copyValue').addEventListener('click', async () => {
+      try{
+        await navigator.clipboard.writeText(value.replace(/\s/g, ''));
+        toast('Copiat ✓ — enganxa\'l a la teva app del banc');
+      }catch(e){
+        toast('No s\'ha pogut copiar');
+      }
+    });
   } else {
-    el.innerHTML = currentMenu.iban
-      ? `<div class="num">${currentMenu.iban}</div><div class="tap">Fes la transferència a aquest IBAN</div>`
-      : `<span class="missing">L'encarregat/da encara no ha configurat l'IBAN.</span>`;
+    el.innerHTML = `<span class="missing">${missing}</span>`;
   }
 }
 
@@ -730,7 +815,7 @@ let editingOrderId = null;
 let editingLines = null;
 
 function computeGroups(orders){
-  const groups = {}; // tipus -> { total, combos: { key: {mida, sense, qty, noms:[]} } }
+  const groups = {}; // tipus -> { total, combos: { key: {mida, sense, extres, qty, noms:[]} } }
   let grand = 0;
   orders.forEach(o => {
     grand += o.total;
@@ -738,8 +823,10 @@ function computeGroups(orders){
       if(!groups[line.tipus]) groups[line.tipus] = { total: 0, combos: {} };
       const g = groups[line.tipus];
       g.total += line.qty;
-      const key = line.mida + '|' + (line.sense || []).slice().sort().join(',');
-      if(!g.combos[key]) g.combos[key] = { mida: line.mida, sense: line.sense || [], qty: 0, noms: [] };
+      const senseKey = (line.sense || []).slice().sort().join(',');
+      const extresKey = (line.extres || []).slice().sort().join(',');
+      const key = line.mida + '|' + senseKey + '|' + extresKey;
+      if(!g.combos[key]) g.combos[key] = { mida: line.mida, sense: line.sense || [], extres: line.extres || [], qty: 0, noms: [] };
       g.combos[key].qty += line.qty;
       g.combos[key].noms.push(line.qty > 1 ? `${o.nom} (${line.qty})` : o.nom);
     });
@@ -787,7 +874,10 @@ function renderOrders(orders){
       .forEach(combo => {
         const line = document.createElement('div');
         line.className = 'combo-line';
-        const senseTxt = combo.sense.length ? `<span class="sense">sense ${combo.sense.join(', ').toLowerCase()}</span>` : '';
+        const bits = [];
+        if(combo.sense.length) bits.push(`sense ${combo.sense.join(', ').toLowerCase()}`);
+        if(combo.extres.length) bits.push(`+ ${combo.extres.join(', ')}`);
+        const senseTxt = bits.length ? `<span class="sense">${bits.join(' · ')}</span>` : '';
         line.innerHTML = `<span class="qty">${combo.qty}×</span><span class="mid"><b>${combo.mida}</b>${senseTxt}</span><span class="noms">${combo.noms.join(', ')}</span>`;
         groupEl.appendChild(line);
       });
@@ -812,8 +902,9 @@ function renderOrders(orders){
       let linesHtml = '';
       editingLines.forEach((l, i) => {
         const senseTxt = l.sense && l.sense.length ? ` <span style="color:var(--ink-soft); font-weight:600;">(sense ${l.sense.join(', ').toLowerCase()})</span>` : '';
+        const extresTxt = l.extres && l.extres.length ? ` <span style="color:var(--good); font-weight:600;">(+ ${l.extres.join(', ')})</span>` : '';
         linesHtml += `<div class="order-edit-line">
-          <span class="desc"><b>${l.tipus}</b> · ${l.mida}${senseTxt}</span>
+          <span class="desc"><b>${l.tipus}</b> · ${l.mida}${senseTxt}${extresTxt}</span>
           <div class="qty-stepper">
             <button type="button" class="editQtyMinus" data-i="${i}">−</button>
             <span>${l.qty}</span>
@@ -834,7 +925,8 @@ function renderOrders(orders){
     } else {
       const detail = o.items.map(l => {
         const senseTxt = l.sense && l.sense.length ? ` (sense ${l.sense.join(', ').toLowerCase()})` : '';
-        return `${l.qty}×${l.tipus} ${l.mida}${senseTxt}`;
+        const extresTxt = l.extres && l.extres.length ? ` (+ ${l.extres.join(', ')})` : '';
+        return `${l.qty}×${l.tipus} ${l.mida}${senseTxt}${extresTxt}`;
       }).join(', ');
       const proofBtn = o.comprovant
         ? `<button class="btn-edit-order viewProofBtn" data-id="${o.id}" style="background:var(--good); color:#fff;">🧾 Comprovant</button>`
@@ -951,27 +1043,36 @@ document.getElementById('unlockBtn').addEventListener('click', () => {
 
 let adminMides = [];
 let adminTipus = [];
+let adminExtres = [];
 
 function renderMidesRows(){
   const wrap = document.getElementById('midesRows');
   wrap.innerHTML = '';
-  adminMides.forEach((m, i) => {
+  adminMides.forEach((nomMida, i) => {
     const row = document.createElement('div');
     row.className = 'edit-row';
     row.innerHTML = `
-      <input type="text" value="${m.nom}" placeholder="Nom (ex: L)" data-i="${i}" data-f="nom">
-      <input type="text" inputmode="decimal" class="preu-input" value="${m.preu}" placeholder="Preu €" data-i="${i}" data-f="preu">
+      <input type="text" value="${nomMida}" placeholder="Nom (ex: L)" data-i="${i}">
       <button type="button" class="rm-row" data-i="${i}">✕</button>`;
     wrap.appendChild(row);
   });
   wrap.querySelectorAll('input').forEach(inp => {
     inp.addEventListener('input', () => {
-      const i = parseInt(inp.dataset.i), f = inp.dataset.f;
-      adminMides[i][f] = f === 'preu' ? (parseFloat(inp.value.replace(',', '.')) || 0) : inp.value;
+      const old = adminMides[parseInt(inp.dataset.i)];
+      const nou = inp.value;
+      adminMides[parseInt(inp.dataset.i)] = nou;
+      // actualitza la clau a tots els tipus si canvia el nom
+      adminTipus.forEach(t => {
+        if(t.preus && old in t.preus){ t.preus[nou] = t.preus[old]; if(nou !== old) delete t.preus[old]; }
+      });
     });
   });
   wrap.querySelectorAll('.rm-row').forEach(btn => {
-    btn.addEventListener('click', () => { adminMides.splice(parseInt(btn.dataset.i), 1); renderMidesRows(); });
+    btn.addEventListener('click', () => {
+      adminMides.splice(parseInt(btn.dataset.i), 1);
+      renderMidesRows();
+      renderTipusRows();
+    });
   });
 }
 
@@ -979,6 +1080,12 @@ function renderTipusRows(){
   const wrap = document.getElementById('tipusRows');
   wrap.innerHTML = '';
   adminTipus.forEach((t, i) => {
+    if(!t.preus) t.preus = {};
+    const preusHtml = adminMides.map(nomMida => `
+      <div style="flex:1; min-width:70px;">
+        <span style="font-size:10.5px; font-weight:800; color:var(--ink-soft); text-transform:uppercase;">${nomMida}</span>
+        <input type="text" inputmode="decimal" class="preu-input" value="${t.preus[nomMida] != null ? t.preus[nomMida] : ''}" placeholder="€" data-i="${i}" data-mida="${nomMida}">
+      </div>`).join('');
     const block = document.createElement('div');
     block.className = 'tipus-block';
     block.innerHTML = `
@@ -986,6 +1093,9 @@ function renderTipusRows(){
       <span class="ing-label">Ingredients (separats per comes, es poden treure)</span>
       <div class="edit-row">
         <input type="text" value="${(t.ingredients||[]).join(', ')}" placeholder="ex: Salsa, Formatge, Patates" data-i="${i}" data-f="ingredients">
+      </div>
+      <span class="ing-label">Preu per mida</span>
+      <div class="edit-row" style="flex-wrap:wrap;">${preusHtml}
         <button type="button" class="rm-row" data-i="${i}">✕</button>
       </div>`;
     wrap.appendChild(block);
@@ -998,18 +1108,53 @@ function renderTipusRows(){
       adminTipus[parseInt(inp.dataset.i)].ingredients = inp.value.split(',').map(s => s.trim()).filter(Boolean);
     });
   });
+  wrap.querySelectorAll('input[data-mida]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const t = adminTipus[parseInt(inp.dataset.i)];
+      if(!t.preus) t.preus = {};
+      t.preus[inp.dataset.mida] = parseFloat(inp.value.replace(',', '.')) || 0;
+    });
+  });
   wrap.querySelectorAll('.rm-row').forEach(btn => {
     btn.addEventListener('click', () => { adminTipus.splice(parseInt(btn.dataset.i), 1); renderTipusRows(); });
   });
 }
 
+function renderExtresRows(){
+  const wrap = document.getElementById('extresRows');
+  wrap.innerHTML = '';
+  adminExtres.forEach((ex, i) => {
+    const row = document.createElement('div');
+    row.className = 'edit-row';
+    row.innerHTML = `
+      <input type="text" value="${ex.nom}" placeholder="Nom de l'extra" data-i="${i}" data-f="nom">
+      <input type="text" inputmode="decimal" class="preu-input" value="${ex.preu}" placeholder="Preu €" data-i="${i}" data-f="preu">
+      <button type="button" class="rm-row" data-i="${i}">✕</button>`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('input[data-f="nom"]').forEach(inp => {
+    inp.addEventListener('input', () => { adminExtres[parseInt(inp.dataset.i)].nom = inp.value; });
+  });
+  wrap.querySelectorAll('input[data-f="preu"]').forEach(inp => {
+    inp.addEventListener('input', () => { adminExtres[parseInt(inp.dataset.i)].preu = parseFloat(inp.value.replace(',', '.')) || 0; });
+  });
+  wrap.querySelectorAll('.rm-row').forEach(btn => {
+    btn.addEventListener('click', () => { adminExtres.splice(parseInt(btn.dataset.i), 1); renderExtresRows(); });
+  });
+}
+
 document.getElementById('btnAddMida').addEventListener('click', () => {
-  adminMides.push({ nom: '', preu: 0 });
+  adminMides.push('');
   renderMidesRows();
+  renderTipusRows();
 });
 document.getElementById('btnAddTipus').addEventListener('click', () => {
-  adminTipus.push({ nom: '', ingredients: [] });
+  adminTipus.push({ nom: '', ingredients: [], preus: {} });
   renderTipusRows();
+});
+document.getElementById('btnAddExtra').addEventListener('click', () => {
+  adminExtres.push({ nom: '', preu: 0 });
+  renderExtresRows();
 });
 
 document.getElementById('adminToggle').addEventListener('click', () => {
@@ -1022,21 +1167,24 @@ document.getElementById('adminToggle').addEventListener('click', () => {
   document.getElementById('ibanInput').value = currentMenu.iban || '';
   adminMides = JSON.parse(JSON.stringify(currentMenu.mides || []));
   adminTipus = JSON.parse(JSON.stringify(currentMenu.tipus || []));
+  adminExtres = JSON.parse(JSON.stringify(currentMenu.extres || []));
   renderMidesRows();
   renderTipusRows();
+  renderExtresRows();
   panel.style.display = 'block';
 });
 
 document.getElementById('btnSaveMenu').addEventListener('click', async () => {
   if(!firebaseReady){ toast('Cal connectar Firebase primer'); return; }
-  const mides = adminMides.filter(m => m.nom.trim());
+  const mides = adminMides.map(m => m.trim()).filter(Boolean);
   const tipus = adminTipus.filter(t => t.nom.trim());
+  const extres = adminExtres.filter(ex => ex.nom.trim());
   const nouMenu = {
     data: document.getElementById('dataInput').value.trim() || 'Dijous',
     tancat: document.getElementById('closedCheck').checked,
     bizum: document.getElementById('bizumInput').value.trim(),
     iban: document.getElementById('ibanInput').value.trim(),
-    mides, tipus
+    mides, tipus, extres
   };
   try{
     await db.collection(MENU_DOC).doc('actual').set(nouMenu);
@@ -1057,7 +1205,10 @@ document.getElementById('btnWhatsappExport').addEventListener('click', async () 
     Object.values(g.combos)
       .sort((a,b) => a.mida.localeCompare(b.mida))
       .forEach(combo => {
-        const senseTxt = combo.sense.length ? ` (sense ${combo.sense.join(', ').toLowerCase()})` : '';
+        const bits = [];
+        if(combo.sense.length) bits.push(`sense ${combo.sense.join(', ').toLowerCase()}`);
+        if(combo.extres.length) bits.push(`+ ${combo.extres.join(', ')}`);
+        const senseTxt = bits.length ? ` (${bits.join(' · ')})` : '';
         text += `${combo.qty}× ${combo.mida}${senseTxt} — ${combo.noms.join(', ')}\n`;
       });
     text += '\n';
