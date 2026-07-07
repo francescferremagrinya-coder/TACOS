@@ -1011,9 +1011,40 @@ function renderOrders(orders){
   document.getElementById('grandTotalValue').textContent = euro(grand);
 }
 
+function migrateMenu(m){
+  if(!m) return m;
+  // format antic: mides = [{nom, preu}] -> nou: mides = ["L", "XL"...] amb preus dins de cada tipus
+  let oldPriceMap = null;
+  if(Array.isArray(m.mides) && m.mides.length && typeof m.mides[0] === 'object' && m.mides[0] !== null){
+    oldPriceMap = {};
+    m.mides.forEach(x => { oldPriceMap[x.nom] = x.preu; });
+    m.mides = m.mides.map(x => x.nom);
+  }
+  if(!Array.isArray(m.mides)) m.mides = [];
+  if(Array.isArray(m.tipus)){
+    m.tipus.forEach(t => {
+      if(!t.preus || typeof t.preus !== 'object'){
+        t.preus = {};
+        m.mides.forEach(nomMida => {
+          t.preus[nomMida] = oldPriceMap ? (oldPriceMap[nomMida] || 0) : 0;
+        });
+      } else {
+        // assegura que totes les mides actuals tenen un preu (encara que sigui 0)
+        m.mides.forEach(nomMida => {
+          if(t.preus[nomMida] == null) t.preus[nomMida] = 0;
+        });
+      }
+    });
+  } else {
+    m.tipus = [];
+  }
+  if(!Array.isArray(m.extres)) m.extres = [];
+  return m;
+}
+
 if(firebaseReady){
   db.collection(MENU_DOC).doc('actual').onSnapshot(doc => {
-    currentMenu = doc.exists ? doc.data() : DEFAULT_MENU;
+    currentMenu = doc.exists ? migrateMenu(doc.data()) : DEFAULT_MENU;
     renderMenu();
     renderCart();
   }, err => console.error(err));
