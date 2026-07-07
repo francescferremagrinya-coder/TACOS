@@ -1038,7 +1038,9 @@ function migrateMenu(m){
   } else {
     m.tipus = [];
   }
-  if(!Array.isArray(m.extres)) m.extres = [];
+  if(!Array.isArray(m.extres) || m.extres.length === 0){
+    m.extres = JSON.parse(JSON.stringify(DEFAULT_MENU.extres));
+  }
   return m;
 }
 
