@@ -278,22 +278,23 @@ input[type=text]:focus, select:focus{outline:none; border-color:var(--chili);}
     <button class="btn-primary" id="btnClosePayment" style="margin-top:16px">Fet</button>
   </div>
 
-  <!-- COMANDES FETES DES D'AQUEST MÒBIL (recordades automàticament) -->
-  <div class="card" id="myOrdersCard" style="display:none">
+  <!-- LES TEVES COMANDES (recordades automàticament + cerca per si canvies de mòbil) -->
+  <div class="card" id="myOrdersCard">
     <h2>Les teves comandes</h2>
-    <p class="hint">Fetes des d'aquest mòbil. Toca-hi per pujar o revisar el comprovant.</p>
+    <p class="hint" id="myOrdersHint">Fetes des d'aquest mòbil. Toca-hi per pujar o revisar el comprovant.</p>
     <div id="myOrdersResults"></div>
-  </div>
 
-  <!-- CERCAR UNA COMANDA (si canvies de mòbil) -->
-  <div class="card" id="findOrderCard">
-    <h2>Has fet la comanda des d'un altre mòbil?</h2>
-    <p class="hint">Cerca pel teu nom. Per seguretat, només es pot pujar el comprovant si encara no n'hi ha cap.</p>
-    <div class="row">
-      <input type="text" id="findNomInput" placeholder="El teu nom">
-      <button class="btn-secondary" id="btnFindOrder" style="flex:0 0 auto; padding:0 18px;">Cerca</button>
+    <div class="admin-link" style="margin-top:10px;">
+      <a id="findOrderToggle">Has fet la comanda des d'un altre mòbil?</a>
     </div>
-    <div id="findResults"></div>
+    <div id="findOrderCard" style="display:none; margin-top:10px;">
+      <p class="hint">Cerca pel teu nom. Per seguretat, només es pot pujar el comprovant si encara no n'hi ha cap.</p>
+      <div class="row">
+        <input type="text" id="findNomInput" placeholder="El teu nom">
+        <button class="btn-secondary" id="btnFindOrder" style="flex:0 0 auto; padding:0 18px;">Cerca</button>
+      </div>
+      <div id="findResults"></div>
+    </div>
   </div>
 
   <!-- ACCÉS ENCARREGAT/DA -->
@@ -858,18 +859,25 @@ function doFindOrder(){
   });
 }
 document.getElementById('btnFindOrder').addEventListener('click', doFindOrder);
+document.getElementById('findOrderToggle').addEventListener('click', () => {
+  const card = document.getElementById('findOrderCard');
+  card.style.display = card.style.display === 'none' ? 'block' : 'none';
+});
 document.getElementById('findNomInput').addEventListener('keydown', (e) => {
   if(e.key === 'Enter') doFindOrder();
 });
 
 function renderMyOrders(){
   const ids = getMyOrderIds();
-  const card = document.getElementById('myOrdersCard');
   const wrap = document.getElementById('myOrdersResults');
-  if(!ids.length){ card.style.display = 'none'; return; }
+  const hint = document.getElementById('myOrdersHint');
   const mine = lastOrders.filter(o => ids.includes(o.id));
-  if(!mine.length){ card.style.display = 'none'; return; }
   wrap.innerHTML = '';
+  if(!mine.length){
+    hint.textContent = "Encara no has fet cap comanda des d'aquest mòbil aquesta setmana.";
+    return;
+  }
+  hint.textContent = "Fetes des d'aquest mòbil. Toca-hi per pujar o revisar el comprovant.";
   mine.forEach(o => {
     const detail = o.items.map(l => `${l.qty}×${l.tipus} ${l.mida}`).join(', ');
     const row = document.createElement('div');
@@ -885,7 +893,6 @@ function renderMyOrders(){
       openPaymentCard(parseFloat(btn.dataset.total), order ? order.comprovant : null);
     });
   });
-  card.style.display = 'block';
 }
 
 let lastOrders = [];
